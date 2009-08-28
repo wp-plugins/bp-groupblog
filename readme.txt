@@ -60,11 +60,8 @@ This plugin requires the Group API included in BuddyPress 1.1. This API is neede
 
 == Changelog ==
 
-=1.0.1 =
-* Added backticks for code in readme.txt
-
 = 1.0 =
 * Initial release.
 
 = The changelog can also be found here: =
-http://plugins.trac.wordpress.org/log/buddypress-group-blog?verbose=on
+http://plugins.trac.wordpress.org/log/bp-groupblog?verbose=on
