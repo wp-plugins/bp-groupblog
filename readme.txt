@@ -4,18 +4,18 @@ Donate link: https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_i
 Tags: buddypress,groups,blogs,content
 Requires at least: WPMU 2.8 / BP 1.1
 Tested up to: WPMU 2.8.4a
-Stable tag: 1.1.6
+Stable tag: 1.2
 
 BuddyPress Groupblog extends the group functionality by enabling the group to have a single blog associated with it. Group members are automatically added to the blog and will have roles as set by the group admin.
 
 == Description ==
 
-**NOTE: This plugin requires BuddyPress 1.1, released September, 2009. See the FAQ why we build it on the upcoming BuddyPress version.**
-
 The BuddyPress Groupblog plugin extends the group functionality by enabling each group to have a single blog associated with it. Group members are automatically added to the blog and will have blog roles as set by the groupblog admin settings.
 
 **Features:**
 
+* Full blog theme integration. The included bp-groupblog theme mimics the group pages.
+* WP Admin option to set default blog for groups plus bonus options.
 * Automated blog registration at group creation stage.
 * Blog privacy settings are initially inherited from group privacy settings.
 * Group members are automatically added to the blog.
@@ -31,27 +31,20 @@ The BuddyPress Groupblog plugin extends the group functionality by enabling each
 **Roadmap:**
 
 * Include an RSS icon for easy access to the Blog's RSS feed.
-* More templates, e.g. a display pages, categories, comments, etc.
 
 == Installation ==
 
-NOTE: After plugin installation, you MUST move the "groupblog" templates folder to your bp active member theme. See below.
-
 1) unzip the bp-groupblog.zip file into `/wp-contents/plugins/bp-groupblog`
 
-2) activate the plugin
+2) move the `/bp-groupblog/themes/bp-groupblog` folder to your WPMU themes folder
 
-3) You are done!
+3) activate the plugin
 
-4) If you want to override the theme files, just copy the 'groupblog' folder into your active theme and modify to your needs.
+4) You are done!
+
+5) If you want to override the groupblog theme files, just copy the 'groupblog' folder into your active theme and modify to your needs.
 
 NOTE: You *must* activate this component AFTER bp has been activated.
-
-== Frequently Asked Questions ==
-
-= Why did you build on a version of BuddyPress that's not yet released? =
-
-This plugin requires the Group API included in BuddyPress 1.1. This API is needed to hook into the creation stages of the group. It also simplifies development for plugins extending group functionality.
 
 == Screenshots ==
 
@@ -59,6 +52,11 @@ This plugin requires the Group API included in BuddyPress 1.1. This API is neede
 2. Screenshot of the group blog page.
 
 == Changelog == 
+
+= 1.2 =
+* Added admin settings screen. You can now set the default groupblog theme, plus some bonus options.
+* Changed some code here and there.
+* Including a groupblog theme based on the bp-sn-parent theme. You can use this theme to make wpmu blogs resemble the BuddyPress group and display group related content inside the groupblog theme.
 
 = 1.1.6 =
 * Added a message to inform the user that a groupblog is only chosen once.
