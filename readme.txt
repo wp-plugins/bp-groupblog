@@ -53,6 +53,12 @@ NOTE: You *must* activate this component AFTER bp has been activated.
 
 == Changelog == 
 
+= 1.2.2 =
+* Added a function to check BuddyPress is loaded first
+
+= 1.2.1 =
+Updated language files
+
 = 1.2 =
 * Added admin settings screen. You can now set the default groupblog theme, plus some bonus options.
 * Changed some code here and there.
