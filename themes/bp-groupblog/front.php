@@ -1,7 +1,5 @@
 <?php
 /*
- * Template Name: Front
- *
  * This template mimmicks the Group Home page. Usefull to figure out how to replace the group home page exactly.
  * activity.php, activity-post-form.php, activity-loop.php
  */
