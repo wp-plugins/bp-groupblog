@@ -4,7 +4,7 @@ Donate link: https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_i
 Tags: buddypress,groups,blogs,content
 Requires at least: WPMU 2.9 / BP 1.2
 Tested up to: WPMU 2.9.1
-Stable tag: 1.3.1
+Stable tag: 1.4.3
 
 BuddyPress Groupblog extends the group functionality by enabling the group to have a single blog associated with it. Group members are automatically added to the blog and will have roles as set by the group admin.
 
@@ -29,10 +29,14 @@ The BuddyPress Groupblog plugin extends the group functionality by enabling each
 * Leaving the group will downgrade the member role to 'subscriber'.
 * Allow the group admin to select one of his/her existing blogs.
 
+**Known Issues:**
+* Group blog post do currently not show up in the group activity stream. Therefore as a short term solution we are including a custom activity loop on the blog page. This should be fixed in the future.
+
 **Roadmap:**
 
 * Allow the admin to let group admins choose the blog name, instead of following the group name.
-* Frontend posting from the blg home page.
+* Frontend posting from the blog home page.
+* Redirect options to integrate deeper with the blog.
 * Include an RSS icon for easy access to the Blog's RSS feed.
 
 == Installation ==
@@ -45,7 +49,7 @@ The BuddyPress Groupblog plugin extends the group functionality by enabling each
 
 4) You are done!
 
-5) Optionally, if you wish to override the files inside the folder called groupblog, first copy that folder over to the BuddyPress bp-default theme folder. You can make any changes in the folder that you just copied and they will take precedence over the original folder.
+5) Optionally, if you would like the sidebar to reflect the blog of the group, move the bp-groupblog/groupblog folder to buddypress/bp-themes/bp-default/.
 
 **NOTE: Please deactivate the plugin before running automatic upgrade or you will get a big fat 'Cannot redeclare' fatal error. Regardless, if you do activate while the plugin is active it will still work fine. It is just that nobody likes errors, even when they are not real.**
 
@@ -59,6 +63,17 @@ Thanks to Boone for coming up with a solid solution to add users to the groupblo
 2. Screenshot of the group blog page.
 
 == Changelog == 
+
+= 1.4.3 =
+* Restructed templating. To control the sidebar of your group, you will need to move the bp-groupblog/groupblog folder to buddypress/bp-themes/bp-default/.
+
+= 1.4.2 =
+* Changed group template behavior and structure
+* Added admin option to redirect to Blog Home within the Group
+
+= 1.4.1 =
+* Groupblog were not created for existing groups, now fixed
+* Fixing the issue above also solved main blog posts within groups
 
 = 1.4 =
 * Made it compatible with WPMU 2.9 / BP 1.2
