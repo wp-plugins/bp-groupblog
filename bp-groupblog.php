@@ -4,7 +4,7 @@ Plugin Name: BP Groupblog
 Plugin URI: http://wordpress.org/extend/plugins/search.php?q=buddypress+groupblog
 Description: Automates and links WPMU blogs groups controlled by the group creator.
 Author: Rodney Blevins & Marius Ooms
-Version: 1.4.3
+Version: 1.4.4
 License: (Groupblog: GNU General Public License 2.0 (GPL) http://www.gnu.org/licenses/gpl.html)
 Site Wide Only: true
 */
@@ -20,7 +20,7 @@ if ( !function_exists( 'bp_core_install' ) ) {
 /*******************************************************************/
 
 define ( 'BP_GROUPBLOG_IS_INSTALLED', 1 );
-define ( 'BP_GROUPBLOG_VERSION', '1.4.3' );
+define ( 'BP_GROUPBLOG_VERSION', '1.4.4' );
 
 // Define default roles
 if ( !defined( 'BP_GROUPBLOG_DEFAULT_ADMIN_ROLE' ) )
@@ -441,15 +441,17 @@ function bp_groupblog_show_blog_form( $blogname = '', $blog_title = '', $errors 
 
     <p><?php _e( 'Choose either one of your existing blogs or create a new one all together with the details displayed below.', 'groupblog' ); ?><br /><?php _e('Take care as you can only choose once.  Later you may still disable or enable the blog, but your choice is set.', 'groupblog' ); ?></p>
         
-		<p><input<?php if ( !bp_groupblog_is_blog_enabled( bp_get_group_id() ) ) { ?> disabled="true"<?php } ?> type="radio" value="no" name="groupblog-create-new" /><span>&nbsp;<?php _e( 'Use one of your own blogs:', 'groupblog' ); ?>&nbsp;</span>
+		<p><input<?php if ( !bp_groupblog_is_blog_enabled( bp_get_group_id() ) ) { ?> disabled="true"<?php } ?> type="radio" value="no" name="groupblog-create-new" /><span>&nbsp;<?php _e( 'Use one of your own available blogs:', 'groupblog' ); ?>&nbsp;</span>
 	    <select<?php if ( !bp_groupblog_is_blog_enabled( bp_get_group_id() ) ) { ?> disabled="true"<?php } ?> name="groupblog-blogid" id="groupblog-blogid">
 	      <option value="0"><?php _e( 'choose a blog', 'groupblog' ) ?></option>
 				  <?php 
 				  $user_blogs = get_blogs_of_user( get_current_user_id() );
 	        //print_r ($user_blogs);
-	          foreach ($user_blogs AS $user_blog) { ?>
-	            <option value="<?php echo $user_blog->userblog_id; ?>"><?php echo $user_blog->blogname; ?></option>
-	          <?php } ?>
+	          foreach ($user_blogs AS $user_blog) {
+		          if ( !get_groupblog_group_id( $user_blog->userblog_id ) ) { ?>
+		            <option value="<?php echo $user_blog->userblog_id; ?>"><?php echo $user_blog->blogname; ?></option>
+	          <?php }
+	          	} ?>
 	   	</select>
     </p>
     		
@@ -551,22 +553,22 @@ function bp_groupblog_validate_blog_form() {
 						if( $result['blogname'] != $maybe[0] ) {
 							
 							//still fails, so add an error to the object
-							$newerrors->add('blogname', __("Only lowercase letters and numbers allowed"));
+							$newerrors->add('blogname', __("Only lowercase letters and numbers allowed", 'groupblog'));
 													
 						}
 						continue;
 					case 'Blog name must be at least 4 characters':
 						if( strlen( $result['blogname'] ) < $checks[minlength] && !is_site_admin() )
-						$newerrors->add('blogname',  __("Blog name must be at least " . $checks[minlength] . " characters"));
+						$newerrors->add('blogname',  __("Blog name must be at least " . $checks[minlength] . " characters", 'groupblog'));
 						continue;
 					case "Sorry, blog names may not contain the character '_'!": 
 						if($checks['allowunderscores']!= 1) {
-							$newerrors->add('blogname', __("Sorry, blog names may not contain the character '_'!"));
+							$newerrors->add('blogname', __("Sorry, blog names may not contain the character '_'!", 'groupblog'));
 						}
 						continue;
 					case 'Sorry, blog names must have letters too!':
 						if($checks['allownumeric'] != 1){
-							$newerrors->add('blogname', __("Sorry, blog names must have letters too!"));
+							$newerrors->add('blogname', __("Sorry, blog names must have letters too!", 'groupblog'));
 						}
 						continue;	
 					default:
@@ -768,7 +770,7 @@ function bp_groupblog_validate_blog_signup() {
 function bp_groupblog_create_blog( $group_id ) {
 	global $wpdb, $domain;
 
-	if ( groups_get_groupmeta ( $group_id, 'groupblog_enable_blog' ) != 1 )
+	if ( ( groups_get_groupmeta ( $group_id, 'groupblog_enable_blog' ) != 1 ) || ( groups_get_groupmeta ( $group_id, 'groupblog_blog_id' ) != '' ) )
 		return;
 
 	$current_user = wp_get_current_user();
@@ -798,11 +800,15 @@ function groupblog_screen_blog() {
 	if ( $bp->current_component == $bp->groups->slug && 'blog' == $bp->current_action ) {
 
 		$checks = get_site_option('bp_groupblog_blog_defaults_options');
-		
-		if ( $checks['redirectblog'] == '1' ) {
+
+		if ( $checks['redirectblog'] == 1 ) {
 			$blog_details = get_blog_details( get_groupblog_blog_id(), true );
 			bp_core_redirect( $blog_details->siteurl );
 		} 
+		else if ( $checks['redirectblog'] == 2 ) {
+			$blog_details = get_blog_details( get_groupblog_blog_id(), true );
+			bp_core_redirect( $blog_details->siteurl . '/' . $checks['pageslug'] . '/' );
+		}
 		else {
 			if ( file_exists( locate_template( array( 'groupblog/blog.php' ) ) ) ) {
 				bp_core_load_template( apply_filters( 'groupblog_screen_blog', 'groupblog/blog' ) );
@@ -821,6 +827,22 @@ function groupblog_screen_blog_content() {
 	
 	load_template( WP_PLUGIN_DIR . '/bp-groupblog/bp-groupblog-blog.php' );
 }
+
+function bp_groupblog_delete_meta( $blog_id, $drop = false ) {
+
+	$group_id = get_groupblog_group_id( $blog_id );
+
+	groups_update_groupmeta ( $group_id, 'groupblog_enable_blog', '' );
+	groups_update_groupmeta ( $group_id, 'groupblog_blog_id', '' );
+	groups_update_groupmeta ( $group_id, 'groupblog_silent_add', '' );
+
+  groups_update_groupmeta ( $group_id, 'groupblog_default_admin_role', '' );
+	groups_update_groupmeta ( $group_id, 'groupblog_default_mod_role', '' );
+	groups_update_groupmeta ( $group_id, 'groupblog_default_member_role', '' );	
+		
+}
+
+add_action('delete_blog', 'bp_groupblog_delete_meta', 10, 1);
 
 /* Add a filter option to the filter select box on group activity pages */
 /*
