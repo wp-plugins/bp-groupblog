@@ -10,6 +10,8 @@ BuddyPress Groupblog extends the group functionality by enabling the group to ha
 
 == Description ==
 
+**NOTE: We realize something is going haywire atm with regards to users being added to the main blog instead of the group blog. We are currently working out a fix. Please don't use this plugin until version 1.4.6.**
+
 The BuddyPress Groupblog plugin extends the group functionality by enabling each group to have a single blog associated with it. Group members are automatically added to the blog and will have blog roles as set by the groupblog admin settings.
 
 **Features:**
