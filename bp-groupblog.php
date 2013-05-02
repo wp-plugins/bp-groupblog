@@ -80,6 +80,7 @@ if ( file_exists( WP_PLUGIN_DIR . '/bp-groupblog/languages/groupblog-' . get_loc
 function bp_groupblog_setup_globals() {
 	global $bp, $wpdb;
 
+	$bp->groupblog = new stdClass;
 	$bp->groupblog->image_base = WP_PLUGIN_DIR . '/bp-groupblog/groupblog/images';
 	$bp->groupblog->slug = BP_GROUPBLOG_SLUG;
 	$bp->groupblog->default_admin_role = BP_GROUPBLOG_DEFAULT_ADMIN_ROLE;
@@ -122,10 +123,18 @@ function bp_groupblog_setup_nav() {
 				)
 
 			) {
+
+				// add a filter so plugins can change the name
+				$name = __( 'Blog', 'groupblog' );
+				$name = apply_filters( 'bp_groupblog_subnav_item_name', $name );
+
+				// add a filter so plugins can change the slug
+				$slug = apply_filters( 'bp_groupblog_subnav_item_slug', 'blog' );
+
 				bp_core_new_subnav_item(
 					array(
-						'name' => __( 'Blog', 'groupblog' ),
-						'slug' => 'blog',
+						'name' => $name,
+						'slug' => $slug,
 						'parent_url' => $group_link,
 						'parent_slug' => $parent_slug,
 						'screen_function' => 'groupblog_screen_blog',
@@ -304,9 +313,8 @@ function bp_groupblog_upgrade_user( $user_id, $group_id, $blog_id = false ) {
 	$groupblog_default_admin_role  = groups_get_groupmeta ( $group_id, 'groupblog_default_admin_role' );
 	$groupblog_creator_role        = 'admin';
 
-	$user = new WP_User( $user_id );
-
-	$user_role = bp_groupblog_get_user_role( $user_id, $user->data->user_login, $blog_id );
+	// get user's blog role
+	$user_role = bp_groupblog_get_user_role( $user_id, false, $blog_id );
 
 	// Get the current user's group status. For efficiency, we try first to look at the
 	// current group object
@@ -355,13 +363,34 @@ function bp_groupblog_upgrade_user( $user_id, $group_id, $blog_id = false ) {
 		}
 	}
 
+	// change user status based on promotion / demotion
+	switch( bp_action_variable( 1 ) ) {
+		case 'promote' :
+			$user_group_status = bp_action_variable( 2 );
+
+			break;
+
+		case 'demote' :
+		case 'unban' :
+			$user_group_status = 'member';
+
+			break;
+	}
+
+	// set the role
 	switch ( $user_group_status ) {
 		case 'admin' :
 			$default_role = $groupblog_default_admin_role;
 			break;
+
 		case 'mod' :
 			$default_role = $groupblog_default_mod_role;
 			break;
+
+		case 'subscriber' :
+			$default_role = 'subscriber';
+			break;
+
 		case 'member' :
 		default :
 			$default_role = $groupblog_default_member_role;
@@ -402,24 +431,24 @@ add_action( 'groups_join_group', 'bp_groupblog_just_joined_group', 5, 2 );
 function bp_groupblog_changed_status_group( $user_id, $group_id ) {
 	bp_groupblog_upgrade_user( $user_id, $group_id );
 }
-add_action( 'groups_promoted_member', 'bp_groupblog_changed_status_group', 10, 2 );
-add_action( 'groups_demoted_member', 'bp_groupblog_changed_status_group', 10, 2 );
-add_action( 'groups_unbanned_member', 'bp_groupblog_changed_status_group', 10, 2 );
+add_action( 'groups_promoted_member',     'bp_groupblog_changed_status_group', 10, 2 );
+add_action( 'groups_demoted_member',      'bp_groupblog_changed_status_group', 10, 2 );
+add_action( 'groups_unbanned_member',     'bp_groupblog_changed_status_group', 10, 2 );
+add_action( 'groups_banned_member',       'bp_groupblog_changed_status_group', 10, 2 );
+add_action( 'groups_removed_member',      'bp_groupblog_changed_status_group', 10, 2 );
 add_action( 'groups_membership_accepted', 'bp_groupblog_changed_status_group', 10, 2 );
-add_action( 'groups_accept_invite', 'bp_groupblog_changed_status_group', 10, 2 );
+add_action( 'groups_accept_invite',       'bp_groupblog_changed_status_group', 10, 2 );
 
 
 /**
  * bp_groupblog_remove_user( $group_id, $user_id = false )
  *
- * Called when user leaves, or is banned from, the group
+ * Called when user leaves.
  */
 function bp_groupblog_remove_user( $group_id, $user_id = false ) {
-	global $bp, $blog_id;
-
 	$blog_id = get_groupblog_blog_id( $group_id );
 
-	if ( !$user_id )
+	if ( ! $user_id )
 		$user_id = bp_loggedin_user_id();
 
 	$user = new WP_User( $user_id );
@@ -428,36 +457,40 @@ function bp_groupblog_remove_user( $group_id, $user_id = false ) {
 	wp_cache_delete( $user_id, 'users' );
 }
 add_action( 'groups_leave_group', 'bp_groupblog_remove_user' );
-add_action( 'groups_banned_member', 'bp_groupblog_remove_user' );
 
 /**
  * bp_groupblog_get_user_role( $user_id, $user_login, $blog_id )
  *
  * Reworked function to retrieve the users current role - by Boone
+ *
+ * @param int $user_id The user ID
+ * @param bool $user_login Deprecated. Don't use.
+ * @param int $blog_id The blog ID
+ * @return string The user's blog role
  */
-function bp_groupblog_get_user_role( $user_id, $user_login, $blog_id ) {
-	global $bp, $blog_id, $current_blog;
-
-	if ( !$blog_id || !$user_id )
-		return false;
+function bp_groupblog_get_user_role( $user_id, $user_login = false, $blog_id ) {
+	global $bp, $wpdb;
 
 	// determine users role, if any, on this blog
-	$roles = get_user_meta( $user_id, 'wp_' . $blog_id . '_capabilities', true );
+	$roles = get_user_meta( $user_id, $wpdb->get_blog_prefix( $blog_id ) . 'capabilities', true );
 
 	// this seems to be the only way to do this
-	if ( isset( $roles['subscriber'] ) )
+	if ( isset( $roles['subscriber'] ) ) {
 		$user_role = 'subscriber';
-	elseif	( isset( $roles['contributor'] ) )
+	} elseif ( isset( $roles['contributor'] ) ) {
 		$user_role = 'contributor';
-	elseif	( isset( $roles['author'] ) )
+	} elseif ( isset( $roles['author'] ) ) {
 		$user_role = 'author';
-	elseif ( isset( $roles['editor'] ) )
+	} elseif ( isset( $roles['editor'] ) ) {
 		$user_role = 'editor';
-	elseif ( isset( $roles['administrator'] ) )
+	} elseif ( isset( $roles['administrator'] ) ) {
 		$user_role = 'administrator';
-	elseif ( is_super_admin( $user_login ) )
+	} elseif ( is_super_admin( $user_id ) ) {
 		$user_role = 'siteadmin';
-	else $user_role = 'norole';
+	} else {
+		$user_role = 'norole';
+	}
+
 	return $user_role;
 }
 
@@ -667,10 +700,12 @@ function bp_groupblog_validate_blog_form() {
 	foreach ($errors->errors as $key => $value) {
 		// if the error is with the blog name, check to see which one
 		if ($key == 'blogname'){
+
 			foreach ($value as $subkey => $subvalue) {
 
 				switch ($subvalue){
-					case 'Only lowercase letters and numbers allowed':
+					case 'Only lowercase letters (a-z) and numbers are allowed.':
+
 						$allowedchars = '';
 						if ($checks['allowdashes']== 1) $allowedchars .= '-';
 						if ($checks['allowunderscores'] == 1) $allowedchars .= '_';
@@ -684,16 +719,16 @@ function bp_groupblog_validate_blog_form() {
 
 						}
 						continue;
-					case 'Blog name must be at least 4 characters':
+					case 'Site name must be at least 4 characters.':
 						if( strlen( $result['blogname'] ) < $checks[minlength] && !is_super_admin() )
 						$newerrors->add('blogname',  __("Blog name must be at least " . $checks[minlength] . " characters", 'groupblog'));
 						continue;
-					case "Sorry, blog names may not contain the character '_'!":
+					case "Sorry, site names may not contain the character &#8220;_&#8221;!":
 						if($checks['allowunderscores']!= 1) {
 							$newerrors->add('blogname', __("Sorry, blog names may not contain the character '_'!", 'groupblog'));
 						}
 						continue;
-					case 'Sorry, blog names must have letters too!':
+					case 'Sorry, site names must have letters too!':
 						if($checks['allownumeric'] != 1){
 							$newerrors->add('blogname', __("Sorry, blog names must have letters too!", 'groupblog'));
 						}
@@ -804,10 +839,11 @@ function bp_groupblog_signup_blog($blogname = '', $blog_title = '', $errors = ''
 
 	$disabled = !bp_groupblog_silent_add( $group_id ) || !bp_groupblog_is_blog_enabled( $group_id ) ? ' disabled="true" ' : '';
 
-  if ( !$groupblog_create_screen ) { ?>
+	?>
 	<h2><?php _e( 'Group Blog', 'groupblog' ) ?></h2>
+	<?php
 
-	<form id="setupform" method="post" action="<?php bp_groupblog_admin_form_action( 'group-blog' ); ?>">
+	if ( !$groupblog_create_screen ) { ?>
 		<input type="hidden" name="stage" value="gimmeanotherblog" />
 		<?php do_action( "signup_hidden_fields" ); ?>
 	<?php } ?>
@@ -918,13 +954,11 @@ function bp_groupblog_signup_blog($blogname = '', $blog_title = '', $errors = ''
 
 		<?php endif; ?>
 
-		<?php if ( !$groupblog_create_screen ) { ?>
-		<p>
-			<input id="save" type="submit" name="save" class="submit" value="<?php _e('Save Changes &raquo;', 'groupblog') ?>"/>
-		</p>
-	</form>
-	<?php
-	}
+		<?php if ( !$groupblog_create_screen ) : ?>
+			<p>
+				<input id="save" type="submit" name="save" class="submit" value="<?php _e('Save Changes &raquo;', 'groupblog') ?>"/>
+			</p>
+		<?php endif;
 }
 
 /**
@@ -959,7 +993,7 @@ function bp_groupblog_validate_blog_signup() {
 			$message .= __( ' &raquo; Has to contain letters as well.', 'groupblog' );
 		bp_core_add_message( $message, 'error' );
 
-		$redirect_url = isset( $bp->action_variables[0] ) && 'step' == $bp->action_variables[0] ? trailingslashit( bp_loggedin_user_domain() . $bp->groups->slug . '/create/step/' . $bp->action_variables[1] ) : bp_get_group_permalink( groups_get_current_group() ) . '/admin/group-blog/';
+		$redirect_url = bp_is_current_action( 'create' ) ? trailingslashit( bp_get_groups_directory_permalink() . 'create/step/' . bp_action_variable( 1 ) ) : bp_get_group_permalink( groups_get_current_group() ) . '/admin/group-blog/';
 
 		$error_params = array(
 			'create_error'    => '4815162342',
@@ -981,47 +1015,13 @@ function bp_groupblog_validate_blog_signup() {
 	$meta = apply_filters('signup_create_blog_meta', array ('lang_id' => 1, 'public' => $public)); // depreciated
 	$meta = apply_filters( "add_signup_meta", $meta );
 
-	$groupblog_blog_id = wpmu_create_blog( $domain, $path, $blog_title, $current_user->id, $meta, $wpdb->siteid );
+	$groupblog_blog_id = wpmu_create_blog( $domain, $path, $blog_title, $current_user->ID, $meta, $wpdb->siteid );
 
 	$errors = $filtered_results['errors'];
 
 	return true;
 
 }
-
-/**
- * bp_groupblog_create_blog( $group_id )
- *
- * We know everything is final and now are ready to create the blog at group complete stage.
- */
-function bp_groupblog_create_blog( $group_id ) {
-	global $wpdb, $domain;
-
-	if ( ( groups_get_groupmeta ( $group_id, 'groupblog_enable_blog' ) != 1 ) || ( groups_get_groupmeta ( $group_id, 'groupblog_blog_id' ) != '' ) )
-		return;
-
-	$current_user = wp_get_current_user();
-	if( !is_user_logged_in() )
-		die();
-
-	$public = groups_get_groupmeta( $group_id, 'groupblog_public');
-	$blog_title = groups_get_groupmeta( $group_id, 'groupblog_title');
-	$path = groups_get_groupmeta( $group_id, 'groupblog_path');
-	$domain = groups_get_groupmeta( $group_id, 'groupblog_domain');
-
-	$meta = apply_filters('signup_create_blog_meta', array ('lang_id' => 1, 'public' => $public)); // depreciated
-	$meta = apply_filters( "add_signup_meta", $meta );
-
-	$groupblog_blog_id = wpmu_create_blog( $domain, $path, $blog_title, $current_user->id, $meta, $wpdb->siteid );
-
-	groups_update_groupmeta( $group_id, 'groupblog_blog_id', $groupblog_blog_id );
-	groups_update_groupmeta( $group_id, 'groupblog_public', '');
-	groups_update_groupmeta( $group_id, 'groupblog_title', '');
-	groups_update_groupmeta( $group_id, 'groupblog_path', '');
-	groups_update_groupmeta( $group_id, 'groupblog_domain', '');
-
-}
-add_action( 'groups_group_create_complete', 'bp_groupblog_create_blog' );
 
 /**
  * bp_groupblog_set_group_to_post_activity ( $activity )
@@ -1062,10 +1062,13 @@ function bp_groupblog_set_group_to_post_activity( $activity ) {
 	if ( $id ) $activity->id = $id;
 
 	// Replace the necessary values to display in group activity stream
-	$activity->action = sprintf( __( '%s wrote a new blog post %s in the group %s:', 'groupblog'), bp_core_get_userlink( $post->post_author ), '<a href="' . get_permalink( $post->ID ) .'">' . attribute_escape( $post->post_title ) . '</a>', '<a href="' . bp_get_group_permalink( $group ) . '">' . attribute_escape( $group->name ) . '</a>' );
+	$activity->action = sprintf( __( '%s wrote a new blog post %s in the group %s:', 'groupblog'), bp_core_get_userlink( $post->post_author ), '<a href="' . get_permalink( $post->ID ) .'">' . esc_attr( $post->post_title ) . '</a>', '<a href="' . bp_get_group_permalink( $group ) . '">' . esc_attr( $group->name ) . '</a>' );
 	$activity->item_id = (int)$group_id;
 	$activity->component = 'groups';
 	$activity->hide_sitewide = 0;
+
+	// need to set type as new_groupblog_post (see bp_groupblog_posts() below) or filters won't work
+	$activity->type = 'new_groupblog_post';
 
 	remove_action( 'bp_activity_before_save', 'bp_groupblog_set_group_to_post_activity');
 	return $activity;
@@ -1090,20 +1093,19 @@ add_action( 'bp_group_activity_filter_options', 'bp_groupblog_posts' );
  * This screen gets called when the 'group blog' link is clicked.
  */
 function groupblog_screen_blog() {
-	global $bp;
 
-	if ( bp_is_groups_component() && bp_is_current_action( 'blog' ) ) {
+	if ( bp_is_groups_component() && bp_is_current_action( apply_filters( 'bp_groupblog_subnav_item_slug', 'blog' ) ) ) {
 
 		$checks = get_site_option('bp_groupblog_blog_defaults_options');
-		$blog_details = get_blog_details( get_groupblog_blog_id(), true );
+		$home_url = get_home_url( get_groupblog_blog_id() );
 
 		if ( isset( $checks['redirectblog'] ) && $checks['redirectblog'] == 1 ) {
-			bp_core_redirect( $blog_details->siteurl );
-		}
-		else if ( isset( $checks['redirectblog'] ) && $checks['redirectblog'] == 2 ) {
-			bp_core_redirect( $blog_details->siteurl . '/' . $checks['pageslug'] . '/' );
-		}
-		else {
+			bp_core_redirect( $home_url );
+
+		} else if ( isset( $checks['redirectblog'] ) && $checks['redirectblog'] == 2 ) {
+			bp_core_redirect( $home_url . '/' . $checks['pageslug'] . '/' );
+
+		} else {
 			if ( file_exists( locate_template( array( 'groupblog/blog.php' ) ) ) ) {
 				bp_core_load_template( apply_filters( 'groupblog_screen_blog', 'groupblog/blog' ) );
 				add_action( 'bp_screens', 'groupblog_screen_blog' );
@@ -1135,13 +1137,13 @@ function groupblog_screen_blog_content() {
 function groupblog_redirect_group_home() {
 	global $bp;
 
-	if ( $bp->current_component == $bp->groups->slug && $bp->is_single_item && 'home' == $bp->current_action ) {
+	if ( bp_is_group_home() ) {
 
 		$checks = get_site_option('bp_groupblog_blog_defaults_options');
 
 		if ( $checks['deep_group_integration'] ) {
-			$blog_details = get_blog_details( get_groupblog_blog_id(), true );
-			bp_core_redirect( $blog_details->siteurl );
+			$home_url = get_home_url( get_groupblog_blog_id() );
+			bp_core_redirect( $home_url );
 		}
 	}
 }
