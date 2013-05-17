@@ -12,7 +12,7 @@ function bp_groupblog_blog_defaults( $blog_id ) {
 
 		// get the site options
 		$options = get_site_option( 'bp_groupblog_blog_defaults_options' );
-		
+
 		foreach( (array)$options as $key => $value )
 			update_option( $key, $value );
 
@@ -22,7 +22,7 @@ function bp_groupblog_blog_defaults( $blog_id ) {
 			$values = explode( "|", $options['theme'] );
 			switch_theme( $values[0], $values[1] );
 		}
-		
+
 		// groupblog bonus options
 		if ( strlen( $options['default_cat_name'] ) > 0 ) {
 			global $wpdb;
@@ -75,7 +75,6 @@ function bp_groupblog_blog_defaults( $blog_id ) {
 		restore_current_blog();
 
 	}
-	restore_current_blog();
 }
 
 function bp_groupblog_update_defaults() {
@@ -469,10 +468,38 @@ function bp_groupblog_management_page() {
 						</select>
 					</div>
 
-					<?php if ( !empty( $current_groupblog_theme ) ) : ?>
+					<?php if ( !empty( $current_groupblog_theme ) ) : 
+						
+						// set a class for WP3.4+ which has bigger screenshots
+						$wp3point4class = '';
+						if ( function_exists( 'wp_get_themes' ) ) {
+							$wp3point4class = 'current-theme-3point4plus';
+						}
+						
+						// not all themes have screenshots
+						$theme_has_screenshot = false;
+						if ( 
+							isset( $themes[$current_groupblog_theme]['Screenshot'] ) && 
+							$themes[$current_groupblog_theme]['Screenshot'] != '' 
+						) {
+							$theme_has_screenshot = true;
+						}
+						
+						// add class to container if theme has screenshot
+						if ( $theme_has_screenshot ) {
+							$wp3point4class .= ' current-theme-has-screenshot';
+						}
+						
+						// construct attribute
+						$wp3point4classes = '';
+						if ( $wp3point4class != '' ) {
+							$wp3point4classes = ' class="' . $wp3point4class . '"';
+						}
+						
+						?>
 
-						<div id="current-theme">
-							<?php if ( isset( $themes[$current_groupblog_theme]['Screenshot'] ) ) : ?>
+						<div id="current-theme"<?php echo $wp3point4classes; ?>>
+							<?php if ( $theme_has_screenshot ) : ?>
 								<img src="<?php echo $themes[$current_groupblog_theme]['Theme Root URI'] . '/' . $themes[$current_groupblog_theme]['Stylesheet'] . '/' . $themes[$current_groupblog_theme]['Screenshot']; ?>" alt="<?php _e('Current theme preview'); ?>" />
 							<?php endif; ?>
 
