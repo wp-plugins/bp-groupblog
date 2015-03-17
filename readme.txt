@@ -103,16 +103,7 @@ function bp_core_avatar_url() {
 
 = 1.8.10 =
 * Improved compatibility with BuddyPress 2.2.0
-
-= 1.8.9 =
-* Allow some simple HTML in groupblog post titles in activity stream
-* Add 'new_groupblog_post' type to activity filter dropdown
-
-= 1.8.8 =
-* Better wording for activity filter dropdown
-
-= 1.8.7 =
-* Prevent fatal error when blogs or activity component is disabled
+* Removed duplicate CSS selector in nav item
 
 = 1.8.9 =
 * Allow some simple HTML in groupblog post titles in activity stream
